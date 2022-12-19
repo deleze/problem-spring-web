@@ -15,9 +15,10 @@ import org.springframework.http.converter.json.MappingJackson2HttpMessageConvert
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
 import org.springframework.security.web.authentication.logout.LogoutFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
@@ -98,23 +99,25 @@ final class SecurityAdviceTraitTest {
 
     @Configuration
     @Import(SecurityProblemSupport.class)
-    public static class SecurityConfiguration extends WebSecurityConfigurerAdapter {
+    @EnableWebSecurity
+    public static class SecurityConfiguration {
 
         @Autowired
         private SecurityProblemSupport problemSupport;
 
-        @Override
-        public void configure(final HttpSecurity http) throws Exception {
-            http.csrf().disable();
-            http.httpBasic().disable();
-            http.sessionManagement().disable();
-            http.authorizeRequests()
-                    .antMatchers("/greet").hasRole("ADMIN")
-                    .anyRequest().authenticated();
-            http.exceptionHandling()
+        @Bean
+        public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+            http.csrf().disable()
+                    .httpBasic().disable()
+                    .sessionManagement().disable()
+                    .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/greet").hasRole("ADMIN")
+                        .anyRequest().authenticated())
+                    .exceptionHandling()
                     .authenticationEntryPoint(problemSupport)
                     .accessDeniedHandler(problemSupport);
             http.addFilterBefore(new AuthenticationFilter(problemSupport), LogoutFilter.class);
+            return http.build();
         }
 
     }
@@ -169,7 +172,7 @@ final class SecurityAdviceTraitTest {
                 .andExpect(content().contentType(MediaTypes.PROBLEM))
                 .andExpect(jsonPath("$.title", is("Forbidden")))
                 .andExpect(jsonPath("$.status", is(403)))
-                .andExpect(jsonPath("$.detail", is("Access is denied")));
+                .andExpect(jsonPath("$.detail", is("Access Denied")));
     }
 
     @Test
